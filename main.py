@@ -47,7 +47,7 @@ def upload(record):
             "archived_at": {"S": datetime.utcnow().isoformat()}
         }
     )
-    container.delete_item(item=record, partition_key=record["billing_id"])
+
 
 
 
@@ -60,29 +60,31 @@ container = database.get_container_client(COSMOS_CONTAINER)
 def handler(event, context):
     cutoff_date = datetime.utcnow() - timedelta(days=COSMOS_CUTOFF_DAYS)
     query = f"SELECT * FROM c WHERE c.timestamp < '{cutoff_date.isoformat()}'"
+    total_uploaded = 0
 
-    result = container.query_items(
+    iterator = container.query_items(
         query=query,
         enable_cross_partition_query=True,
         max_item_count=100
     )
 
-    total_uploaded = 0
+    for page in iterator.by_page():
+        for record in page:
+            billing_id = record["billing_id"]
 
-    for record in result:
-        billing_id = record["billing_id"]
+            if is_uploaded(billing_id):
+                print(f"[SKIP] {billing_id} already uploaded")
+                continue
 
-        if is_uploaded(billing_id):
-            print(f"[SKIP] {billing_id} already uploaded")
-            continue
+            try:
+                upload(record)
+                print(f"[OK] {billing_id} uploaded")
+                container.delete_item(item=record, partition_key=record["billing_id"])
 
-        try:
-            upload(record)
-            print(f"[OK] {billing_id} uploaded")
-            total_uploaded += 1
-        except Exception as e:
-            print(f"[FAIL] Upload failed for {billing_id}: {e}")
-            break
+                total_uploaded += 1
+            except Exception as e:
+                print(f"[FAIL] Upload failed for {billing_id}: {e}")
+                continue  # Continue even if one record fails
 
     print(f"Total records uploaded: {total_uploaded}")
 
