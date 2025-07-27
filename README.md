@@ -111,7 +111,7 @@ We’ve implemented a **serverless data archival solution** using AWS that:
 ### 2. ✅ Set-up
 - clone repo using git clone
 
-### 3. ✅ Prerequisites
+### 3. ✅ Apply/Use
 
 
 terraform init
